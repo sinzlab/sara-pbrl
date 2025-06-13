@@ -1,0 +1,39 @@
+NoNegative: False
+action_dim: None #replace
+actionWeight: 0
+batch_size: 256
+contWeight: 1
+cosine_lr: True
+decoderlr: 0.001
+device: cuda
+early_stop: False
+embedDim: 16
+epochs: 4000 #replace
+evalOn2Sets: True
+exp_name: None
+filepath: None
+group: None
+job_type: None
+lr: .00001
+numSetsPerAgent: 2
+obs_dim: None #replace
+obsOnly: False
+seed: None
+stepMax: None #replace
+task_name: None #replace
+temp: 0.1
+trainUniqueTrajs: True
+transformerCfg:
+      avgPool: True
+      batch_first: True
+      d_model: 256
+      dim_feedforward_encoder: 256
+      dropout_encoder: 0
+      dropout_pos_enc: 0
+      timestep_mask: NoMask
+      windowEnc: None
+      n_encoder_layers: 1
+      n_heads: 4
+useFullQuerySet: True
+random_seqLen_start: True
+seqLenList: [10,20,30,40,50,60,70,80,90,100]
