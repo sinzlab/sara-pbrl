@@ -1,0 +1,33 @@
+----------------------------------------------------------------------------------
+| eval/episode_length                | 385      |
+| eval/episode_length_std            | 5.13     |
+| eval/normalized_episode_reward     | 20.6     |
+| eval/normalized_episode_reward_std | 0.773    |
+| loss/actor                         | 2.66     |
+| loss/q1                            | 0.039    |
+| loss/q2                            | 0.037    |
+| loss/v                             | 0.00292  |
+| timestep                           | 1000     |
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+| eval/episode_length                | 802      |
+| eval/episode_length_std            | 19.6     |
+| eval/normalized_episode_reward     | 60.6     |
+| eval/normalized_episode_reward_std | 1.92     |
+| loss/actor                         | 2.07     |
+| loss/q1                            | 0.131    |
+| loss/q2                            | 0.131    |
+| loss/v                             | 0.00474  |
+| timestep                           | 2000     |
+----------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+| eval/episode_length                | 106      |
+| eval/episode_length_std            | 26.2     |
+| eval/normalized_episode_reward     | 8.13     |
+| eval/normalized_episode_reward_std | 3.73     |
+| loss/actor                         | 1.72     |
+| loss/q1                            | 0.247    |
+| loss/q2                            | 0.248    |
+| loss/v                             | 0.00962  |
+| timestep                           | 3000     |
+----------------------------------------------------------------------------------

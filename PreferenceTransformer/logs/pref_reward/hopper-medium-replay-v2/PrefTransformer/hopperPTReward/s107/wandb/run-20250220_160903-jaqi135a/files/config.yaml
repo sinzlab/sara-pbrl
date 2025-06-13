@@ -1,0 +1,194 @@
+_wandb:
+    value:
+        cli_version: 0.19.6
+        m: []
+        python_version: 3.10.8
+        t:
+            "1":
+                - 1
+                - 11
+                - 12
+                - 45
+                - 49
+                - 55
+            "2":
+                - 1
+                - 11
+                - 12
+                - 45
+                - 49
+                - 55
+            "3":
+                - 13
+                - 16
+                - 23
+                - 55
+            "4": 3.10.8
+            "5": 0.19.6
+            "6": 4.48.3
+            "8":
+                - 8
+            "12": 0.19.6
+            "13": linux-x86_64
+activation_final:
+    value: none
+activations:
+    value: relu
+balance:
+    value: false
+batch_size:
+    value: 256
+clip_action:
+    value: 0.999
+comment:
+    value: hopperPTReward
+data_dir:
+    value: ./human_label
+data_seed:
+    value: 3407
+early_stop:
+    value: false
+enable_bootstrap:
+    value: false
+env:
+    value: hopper-medium-replay-v2
+eval_period:
+    value: 5
+feedback_random:
+    value: false
+feedback_uniform:
+    value: false
+hostname:
+    value: ggpu157
+logging.anonymous:
+    value: null
+logging.experiment_id:
+    value: null
+logging.group:
+    value: null
+logging.notes:
+    value: null
+logging.online:
+    value: true
+logging.output_dir:
+    value: ./logs/pref_reward
+logging.prefix:
+    value: ""
+logging.project:
+    value: PreferenceTransformer
+logging.random_delay:
+    value: 0
+lstm.attn_pdrop:
+    value: 0.1
+lstm.embd_dim:
+    value: 256
+lstm.explicit_sparse:
+    value: false
+lstm.k:
+    value: 5
+lstm.lambda_kld:
+    value: 0.1
+lstm.lstm_lr:
+    value: 0.001
+lstm.n_embd:
+    value: 256
+lstm.n_head:
+    value: 1
+lstm.n_inner:
+    value: 128
+lstm.n_layer:
+    value: 3
+lstm.n_positions:
+    value: 1024
+lstm.optimizer_type:
+    value: adam
+lstm.resid_pdrop:
+    value: 0.1
+lstm.scheduler_type:
+    value: none
+lstm.softmax_temperature:
+    value: 5
+lstm.train_diff_bool:
+    value: false
+lstm.train_type:
+    value: sum
+lstm.use_kld:
+    value: false
+lstm.vocab_size:
+    value: 1
+max_traj_length:
+    value: 1000
+min_delta:
+    value: 0.001
+model_type:
+    value: PrefTransformer
+n_epochs:
+    value: 10000
+num_query:
+    value: 500
+orthogonal_init:
+    value: false
+patience:
+    value: 10
+query_len:
+    value: 100
+reward.optimizer_type:
+    value: adam
+reward.rf_lr:
+    value: 0.0003
+reward_arch:
+    value: 256-256
+reward_bias:
+    value: 0
+reward_scale:
+    value: 1
+robosuite:
+    value: false
+robosuite_dataset_path:
+    value: ./data
+robosuite_dataset_type:
+    value: ph
+robosuite_max_episode_steps:
+    value: 500
+save_model:
+    value: true
+seed:
+    value: 107
+skip_flag:
+    value: 0
+topk:
+    value: 10
+training:
+    value: true
+transformer.attn_pdrop:
+    value: 0.1
+transformer.embd_dim:
+    value: 256
+transformer.n_embd:
+    value: 256
+transformer.n_head:
+    value: 4
+transformer.n_layer:
+    value: 1
+transformer.n_positions:
+    value: 1024
+transformer.optimizer_type:
+    value: adamw
+transformer.pref_attn_embd_dim:
+    value: 256
+transformer.resid_pdrop:
+    value: 0.1
+transformer.scheduler_type:
+    value: CosineDecay
+transformer.train_type:
+    value: mean
+transformer.trans_lr:
+    value: 0.0001
+transformer.use_weighted_sum:
+    value: false
+transformer.vocab_size:
+    value: 1
+use_human_label:
+    value: true
+window:
+    value: 2

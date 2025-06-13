@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: offlinerlkit
+Version: 0.0.1
+Summary: OfflineRL-kit
+Author: Yihao Sun
+Author-email: sunyh@lamda.nju.edu.cn
+Maintainer: yihaosun1124
+Platform: all
+License-File: LICENSE

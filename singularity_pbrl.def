@@ -1,0 +1,117 @@
+BootStrap: docker
+From: pytorch/pytorch:2.0.0-cuda11.7-cudnn8-runtime
+
+%files
+    ./mjkey.txt /opt/mjkey.txt
+
+%environment
+    export LANG=C.UTF-8
+    export LD_LIBRARY_PATH=/opt/mujoco200/bin:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
+    export MUJOCO_PY_MUJOCO_PATH=/opt/mujoco200
+    export MUJOCO_PY_MJKEY_PATH=$HOME/.mujoco/mjkey.txt
+    export HTTP_PROXY="http://www-cache.gwdg.de:3128"
+    export HTTPS_PROXY="http://www-cache.gwdg.de:3128"
+    export LIBGL_ALWAYS_INDIRECT=1
+    export PYTHONNOUSERSITE=1
+
+%post
+    export WORKDIR=/opt
+    export LD_LIBRARY_PATH=/opt/mujoco200/bin:${LD_LIBRARY_PATH}
+    export MUJOCO_PY_MUJOCO_PATH=$WORKDIR/mujoco200
+    export MUJOCO_PY_MJKEY_PATH=$WORKDIR/mjkey.txt
+    
+    apt-get update -q && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        git \
+        net-tools \
+        software-properties-common \
+        unzip \
+        wget \
+        vim \
+        build-essential \
+        curl \
+        libglfw3 \
+        libglfw3-dev \
+        xorg \
+        xauth \
+        patchelf
+    
+
+    pip install --no-cache-dir torch==2.5.1 torchvision
+
+    pip install --no-cache-dir \
+        matplotlib \
+        seaborn \
+        wandb \
+        scipy>=1.6.0 \
+        absl-py>=0.12.0 \
+        gdown>=3.12.2 \
+        tqdm>=4.60.0 \
+        ml_collections>=0.1.0 \
+        optax>=0.0.6 \
+        tensorboardX==2.1 \
+        tensorflow-probability>=0.14.1 \
+        imageio>=2.9.0 \
+        imageio-ffmpeg>=0.4.3 \
+        pandas \
+        protobuf==3.20.1 \
+        distrax==0.1.2 \
+        ujson \
+        transformers \
+        python-dateutil \
+        ml-collections \
+        jsonschema \
+        ipykernel \
+        referencing
+
+    
+    pip install 'cython<3'
+
+    git clone https://github.com/tadashiK/mujoco-py.git $WORKDIR/mujoco-py
+    bash $WORKDIR/mujoco-py/singularity/installer.sh $WORKDIR
+    python3 -m pip install gym==0.23.1
+
+    pip install --no-cache-dir \
+        hydra-core \
+        hydra-submitit-launcher \
+        scikit-learn \
+        moviepy \
+        dm-control \
+        tensorboard \
+        opencv-python \
+        hiplot \
+        termcolor \
+        streamlit \
+        ipdb \
+        jupyter \
+        ipython \
+        types-termcolor \
+        black \
+        mypy \
+        pytest \
+        pytest-cov \
+        flake8 \
+        pylint \
+        nevergrad \
+        gitpython \
+        h5py
+    
+    pip install --upgrade \
+    --force-reinstall \
+    --ignore-installed \
+    "jax[cuda12]" \
+    -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+
+    pip install numpy
+
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    chmod -R 777 $WORKDIR
+    chmod +x $WORKDIR/mujoco-py/vendor/Xdummy-entrypoint
+
+%runscript
+    /opt/mujoco-py/vendor/Xdummy-entrypoint "$@"
+    exec "$@"
+

@@ -1,0 +1,43 @@
+{
+  "os":  "Linux-4.18.0-553.34.1.el8_10.x86_64-x86_64-with-glibc2.27",
+  "python":  "CPython 3.10.8",
+  "startedAt":  "2025-02-18T22:18:44.509776Z",
+  "args":  [
+    "--use_human_label",
+    "True",
+    "--comment",
+    "hopperPTReward",
+    "--transformer.embd_dim",
+    "256",
+    "--transformer.n_layer",
+    "1",
+    "--transformer.n_head",
+    "4",
+    "--env",
+    "hopper-medium-replay-v2",
+    "--logging.output_dir",
+    "./logs/pref_reward",
+    "--batch_size",
+    "256",
+    "--num_query",
+    "500",
+    "--query_len",
+    "100",
+    "--skip_flag",
+    "0",
+    "--n_epochs=10000",
+    "--seed",
+    "42",
+    "--model_type",
+    "PrefTransformer"
+  ],
+  "program":  "-m JaxPref.new_preference_reward_main",
+  "git":  {
+    "remote":  "git@github.com:sinzlab/rltransfer.git",
+    "commit":  "1b27875c018ba6cfc4dcc3d1c3a0f8288008583c"
+  },
+  "email":  "sararajaram@gmail.com",
+  "root":  "./logs/pref_reward/hopper-medium-replay-v2/PrefTransformer/hopperPTReward/s42",
+  "host":  "ggpu146",
+  "executable":  "/opt/conda/bin/python"
+}

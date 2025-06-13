@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../../cpl-human"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../rltransfer"
+		},
+		{
+			"path": "../../OfflineRL-Kit"
+		}
+	],
+	"settings": {}
+}

@@ -1,0 +1,7 @@
+gym<=0.24.1,>=0.15.4
+matplotlib
+numpy
+pandas
+torch
+tensorboard
+tqdm
