@@ -20,9 +20,9 @@ Make the preference datasets from the human labels or script labels by running m
 
 Here is an example:
 
-<pre><code>python -m pbrl.make_capencdataset --use05 True --mistake_rate 0.0 --fraction 1.0 --scriptLabel False --task hopper-medium-replay-v2</code></pre>
+<pre><code>python -m pbrl.make_capencdataset --use05 True --mistake_rate 0.0 --fraction 1.0 --scriptLabel False --task hopper-medium-replay-v2 --num_query $num_query</code></pre>
 
-The script creates 4 files: pref_dataset.pkl, pref_eval_dataset.pkl, train_set.pkl, and test_set.pkl. The first two are in the required format for PreferenceTransformer, PreferenceTransformer with ADT, and DPPO. The latter two are in the required format for the SARA framework. The pref_eval_dataset is just a small random subset of pref_dataset. Though we create these train/test splits, we only used the train/test splits for model development and HP tuning. For the results reported in the paper, SARA encoder scripts actually combine train and test so that we use all preference data. Likewise, the baselines use all the preference data in pref_dataset.pkl for the results reported in the paper
+The num_query should be the total number of queries in the task dataset (500 for the replay datasets and 100 for all others). The script creates 4 files: pref_dataset.pkl, pref_eval_dataset.pkl, train_set.pkl, and test_set.pkl. The first two are in the required format for PreferenceTransformer, PreferenceTransformer with ADT, and DPPO. The latter two are in the required format for the SARA framework. The pref_eval_dataset is just a small random subset of pref_dataset. Though we create these train/test splits, we only used the train/test splits for model development and HP tuning. For the results reported in the paper, SARA encoder scripts actually combine train and test so that we use all preference data. Likewise, the baselines use all the preference data in pref_dataset.pkl for the results reported in the paper
 
 The combined train_set.pkl and test_set.pkl used by the SARA encoder has the same data as the pref_dataset.pkl, just different formatting.  As noted above we make these datasets first and then all models/seeds for a given experiment use the same datasets. 
 
@@ -68,7 +68,15 @@ Adjust lambd based on recommended hyperparameters in DPPO paper
 
 ## Running modified hopper  
 
-First 
+To run the experiment shown in Section 5 paragraph "Transfer of preferences to morphologically harder task", first create the modified hopper preference dataset. This will take the hopper-medium-replay-v2 preference data and transform the dimensions as described in the paper to map to dimensions on the walker.
+
+<pre><code>python -m pbrl.make_capencdataset --task hopper-medium-replay-v2 --mod_hopper True --use05 False --fraction 1.0</code></pre>
+
+Then run the PbRL piplein for the walker2d-medium-replay-v2. This will train a SARA encoder for the modified hopper dataset. Next it will relabel the walker replay full offline dataset rewards. Finally, it will run IQL for this walker dataset with relabeled rewards. 
+
+<pre><code>python -m pbrl.run_PbRLPipeline --task walker2d-medium-replay-v2 --run_type run_IQL_SARA --seed $seed --fraction 1.0 --use05 False --mod_hopper True --enc_configpath PROJ_DIR/SARA_PbRL/pbrl/configs --jobInfo jobTypeName</code></pre>
+
+
 
 ## Post processing
 
