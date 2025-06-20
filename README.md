@@ -12,7 +12,7 @@ We also include our fork of the OfflineRL-Kit (https://github.com/yihaosun1124/O
 
 First build the singularity container using the provided singularity_pbrl.def file:
 
-singularity build --fakeroot pbrl.sif singularity_pbrl.def
+<pre><code>```singularity build --fakeroot pbrl.sif singularity_pbrl.def ```</code></pre>
 
 ## Creating Preference Datasets 
 
