@@ -1,18 +1,23 @@
 import pickle
-import torch
-import numpy as np
-from sklearn.model_selection import train_test_split
 import os
 import argparse
-import random
-import torch
-from pathlib import Path
-import gym
 
-from PreferenceTransformer.JaxPref.replay_buffer import get_d4rl_dataset
-from PreferenceTransformer.JaxPref.new_preference_reward_main import create_preference_dataset
-from PreferenceTransformer.JaxPref.sampler import TrajSampler
-from PreferenceTransformer.JaxPref import reward_transform as r_tf
+
+### imports needed for environments###
+import collections
+import collections.abc
+
+# Restore the old name so D4RL’s isinstance(...) check will work
+collections.Mapping = collections.abc.Mapping
+
+# now disable dm_control if you still want that
+from d4rl.kitchen.adept_envs import mujoco_env
+mujoco_env.USE_DM_CONTROL = False
+import gym, d4rl
+from d4rl import hand_manipulation_suite
+###################################
+
+
 from pbrl.ContrastiveCapacityEncoderpbrl import set_seed,CapacityEncoderV2
 import datetime
 import wandb
@@ -23,12 +28,6 @@ import yaml
 os.environ['WANDB_INIT_TIMEOUT'] = '600'
 
 
-
-
-
-#rerun to see if reproduce results
-#make data utilities file for functions that are shared
-#make readme
 
 def get_run_max_epochs(project,group):
     #get runs that are finished for the given project and
@@ -96,7 +95,7 @@ def get_args():
     parser.add_argument("--fraction", type=float, default=1.0)
     parser.add_argument("--use05", type=lambda x: x.lower() == "true", default=None)
     parser.add_argument("--mistake_rate", type=float, default=0.0) 
-    parser.add_argument("--run_type", type=str, default=None) #run_IQL_CapEnc, run_IQL_PrefTrans, run_IQL_PrefTransADT
+    parser.add_argument("--run_type", type=str, default=None) #run_IQL_SARA, run_IQL_PrefTrans, run_IQL_PrefTransADT
     parser.add_argument("--script_label", type=lambda x: x.lower() == "true", default=False) #to use reward models run using the script labels
     
     
@@ -115,9 +114,6 @@ def get_args():
         
     #defaults for all runs
     parser.add_argument("--save_dir", type=str, default='PbRL_results')
-    
-    #for IQL Note: this value can affect the capacity encoder training as well, but it is assumed that the task config is set to take care of that (there may also be a reason why one would make them differ between capacity encoder training and the following IQL  so want to allow for that flexibility )
-    parser.add_argument("--max_ep_len", type=int, default=1000)
 
     return parser.parse_args()
 
@@ -152,6 +148,10 @@ def get_task_dims(task,dataset,save_dir):
     return obs_dim, action_dim
 
 
+def get_env_max_len(task):
+    env=gym.make(task)
+    return env._max_episode_steps
+
 
 def run_pipeline(args):
     percent=int(args.fraction*100)
@@ -178,7 +178,8 @@ def run_pipeline(args):
             raise ValueError("New seed given as argument")
         seed_list=[int(args.seed)]
 
-    if args.run_type=='run_IQL_CapEnc':
+    max_ep_len=get_env_max_len(args.task)
+    if args.run_type=='run_IQL_SARA':
         data_dir=os.path.join(args.save_dir,taskForData,'Data',dataset_name) #if mod_hopper set to true, then taskForData is the hopper dataset (modified) while the IQL task is the walker
         with open(os.path.join(data_dir,'train_set.pkl'), 'rb') as f:
             train_set = pickle.load(f) 
@@ -199,7 +200,7 @@ def run_pipeline(args):
             new_config['action_dim']=action_dim
             new_config['obs_dim']=obs_dim
             new_config['epochs']=args.enc_epochs
-            new_config['stepMax']=args.max_ep_len
+            new_config['stepMax']=max_ep_len
 
             new_config['filepath']=fp
             new_config['exp_name']=exp_name
@@ -233,7 +234,7 @@ def run_pipeline(args):
             script_path = os.path.join("OfflineRL-Kit/run_example/run_iql_infrewards.py")
             iqlCommand=["python", script_path, "--task", args.task, '--seed', str(seed), '--simWRestrictedWeight', str(1.0), '--simWUnrestrictedWeight', str(0.0) ,'--causal_pool1', 'False', '--causal_pool2', str(args.causal_pool), '--reward_model', 'SimilarityRewards', "--capacityEncoderFilepath", fp, '--dataset_name',dataset_name, '--job_type', job_type, '--windowRewards', str(args.windowRewards), '--src_mask_decoder', str(args.src_mask_decoder),'--use_vary_seqLens', str(args.use_vary_seqLens)]
             iqlCommand.append('--max_ep_len')
-            iqlCommand.append(str(args.max_ep_len))
+            iqlCommand.append(str(max_ep_len))
             if 'kitchen' in args.task or 'pen' in args.task:
                 iqlCommand.append('--dropout_rate')
                 iqlCommand.append('.1')
@@ -261,7 +262,7 @@ def run_pipeline(args):
             script_path = os.path.expandvars("OfflineRL-Kit/run_example/run_iql_infrewards.py")
             iqlCommand=["python", script_path, "--task", args.task, '--seed', str(seed), '--reward_model', 'PreferenceTransformer', "--PrefTrans_ckpt_dir", prefTransFilepath, '--dataset_name', dataset_name, '--job_type', jobInfoPT]
             iqlCommand.append('--max_ep_len')
-            iqlCommand.append(str(args.max_ep_len))
+            iqlCommand.append(str(max_ep_len))
             if 'kitchen' in args.task or 'pen' in args.task:
                 iqlCommand.append('--dropout_rate')
                 iqlCommand.append('.1')

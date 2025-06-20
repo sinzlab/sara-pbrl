@@ -31,11 +31,7 @@ import datetime
 
 import sys
 
-print("##########Python version##########")
-print(sys.version)
-sys.path.append(os.path.join(os.path.expanduser('~'),'rltransfer'))
-import url_benchmark
-from url_benchmark.pbrl.make_offlinedataset import make_offline_dataset, normalize
+from pbrl.make_offlinedataset import make_offline_dataset, normalize
 from PreferenceTransformer.get_PTdataset import make_env_and_dataset
 """
 suggested hypers
@@ -71,9 +67,7 @@ def get_args():
     parser.add_argument("--simWUnrestrictedWeight", type=float, default=None)
     parser.add_argument("--causal_pool1", type=lambda x: x.lower() == "true", default=None)
     parser.add_argument("--causal_pool2", type=lambda x: x.lower() == "true", default=None)
-    parser.add_argument("--capacityEncoderFilepath", type=str, default=None) #os.path.join(os.path.expanduser('~'),'rltransfer/exp_local/2025.02.01/_HopperMediumReplayCapacityNo05_smallerdims/103727')
-    #os.path.join(os.path.expanduser('~'),'rltransfer/exp_local/2025.02.20/_HopperMediumReplayCapacityNo05_s42/003623') full set
-    #os.path.join(os.path.expanduser('~'),'rltransfer/exp_local/2025.02.20/_HopperMediumReplayCapacityNo05_s42_partialset/022643')
+    parser.add_argument("--capacityEncoderFilepath", type=str, default=None) 
     parser.add_argument("--windowRewards",type=lambda x: int(x) if x.lower() != "none" else None, default=None)#parser.add_argument("--windowRewards", type=int, default=None)
     parser.add_argument("--src_mask_decoder", type=lambda x: x.lower() == "true", default=False)
     parser.add_argument("--use_vary_seqLens", type=lambda x: x.lower() == "true", default=False)

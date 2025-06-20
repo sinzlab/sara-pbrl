@@ -1,17 +1,9 @@
 import sys
 import os
-# sys.path.append(os.path.expanduser('~'))
-# sys.path.append(os.path.join(os.path.expanduser('~'),'rltransfer'))
-# sys.path.append(os.path.join(os.path.expanduser('~'),'rltransfer','url_benchmark'))
-# sys.path.append(os.path.join(os.path.expanduser('~'),'rltransfer','OfflineRL-Kit'))
-# sys.path.append(os.path.join(os.path.expanduser('~'),'rltransfer','cpl-human/d4rl'))
-
-
 import d4rl
 
-
-import url_benchmark
-from url_benchmark.pbrl.CottonDecoderV2pbrl import TransformerForInference
+import pbrl
+from pbrl.ContrastiveCapacityEncoderpbrl import CapacityEncoderV2, TransformerForInference
 from collections import OrderedDict
 import datetime
 import gym
@@ -171,7 +163,7 @@ def make_offline_dataset(cfg):
     #we get eval latents on the full training set
 
     #get fixed latents from the two classes of agents (preferred and not preferred)
-    capacityEncoder=url_benchmark.pbrl.ContrastiveCapacityEncoderV2pbrl.CapacityEncoderV2(capEncCfg,train_set=train_set,test_set=[],use_wandb=False) #the train set and test set must be passed in to initialize the class but we don't use it here. 
+    capacityEncoder=CapacityEncoderV2(capEncCfg,train_set=train_set,test_set=[],use_wandb=False) #the train set and test set must be passed in to initialize the class but we don't use it here. 
     capacityEncoder.capacity_encoder.load_state_dict(torch.load(os.path.join(capacityEncoderFilepath,'capacityEncoder.pt'), weights_only=True))
     capacityEncoder.capacity_encoder.eval()
     capacityEncoder=capacityEncoder
@@ -270,25 +262,5 @@ def make_offline_dataset(cfg):
     return dataset
 
 
-def main():
-    
-    capacityEncoderFilepath='/user/rajaram/u13657/103727'#'/home/srajaram/rltransfer/exp_local/2025.02.01/_HopperMediumReplayCapacityNo05_smallerdims/103727'
 
-    
-    cfg={'capacityEncoderFilepath':capacityEncoderFilepath, 'task':'hopper-medium-replay-v2', 'max_ep_len':1000}
-    cfg['causal_pool1']=True
-    cfg['causal_pool2']=False
-    cfg['alpha']=.5
-    cfg['beta']=.5
-    # currDateTime=datetime.datetime.now().strftime("%Y.%m.%d_%H%M%S")
-    # dmod='OfflineDataset'
-    
-    #filepath=os.path.join(os.path.expanduser('~'),'rltransfer/exp_local/',currDateTime.split('_')[0],"HopperMediumReplayCapacity"+dmod)
-    # cfg['save_dir']=filepath
-    make_offline_dataset(cfg)
-                    
-
-
-if __name__ == '__main__':
-    main()
     

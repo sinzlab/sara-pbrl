@@ -13,14 +13,9 @@ import wandb
 import sys
 import copy
 
-#sys.path.append("..")
-
-
-
 from pathlib import Path
 import random
 from torch.utils.data import DataLoader
-
 
 from torch import nn, Tensor
 import math
@@ -198,11 +193,55 @@ class TransformerModel(nn.Module):
         return outputEmbed
 
 
-   
+class TransformerForInference(TransformerModel):
+    def __init__(self,cfg, causal_pool1= False, causal_pool2= False, window_size=None, device='cpu'):
+        if cfg['obsOnly']: #creates inputDim based on the parameters of the capacity encoder config which we are loading
+            self.inputDim=cfg['obs_dim']
+        else:
+            self.inputDim=cfg['obs_dim']+cfg['action_dim']
+        super().__init__(self.inputDim,cfg)
+        weightsToLoad=torch.load(os.path.join(cfg['filepath'],'capacityEncoder.pt'), weights_only=True)
+        self.load_state_dict(weightsToLoad)
+        self.causal_pool1=causal_pool1
+        self.causal_pool2=causal_pool2
+        #print((self.transformer_input_layer.weight==weightsToLoad['transformer_input_layer.weight']).all())...checking just for my sanity :) 
+        self.device=torch.device(device)
+        self.window_size=window_size
 
+    def forward(self,input: Tensor, src_key_padding_mask: Tensor, use_src_mask=True): #compared to capacity encoder transformer, here we have taken out the pooling over timesteps so that we have an embed per timestep. Also added causal masking so can't cheat by looking to future timesteps
+        ##input is size batch_size by max_len (+1 if avgPool is False) by inputDim
+        ###THIS INCLUDES CAUSAL MASKING 
+        out = self.transformer_input_layer(input) #linear layer
+        out = self.positional_encoding_layer(out) #positional encoding, out is batch_size, max_len, d_model 
 
+        if self.window_size is None and use_src_mask:
+            src_mask=nn.Transformer.generate_square_subsequent_mask(input.shape[1]).bool().to(self.device)
+        elif self.window_size is not None and use_src_mask:
+            # Create a sliding window causal mask (can only attend to past timesteps up to window_size)
+            max_ep_len=input.shape[1]
+            src_mask = torch.full((max_ep_len, max_ep_len), fill_value=True, dtype=torch.bool).to(self.device)
 
+            for i in range(max_ep_len):
+                start = max(0, i - self.window_size + 1)  # +1 to ensure exactly 100 past timesteps
+                src_mask[i, start:i+1] = False  # Allow self and past 99 tokens
+        elif not use_src_mask:
+            src_mask=None
+        
+        out=self.encoder(src=out,mask=src_mask,src_key_padding_mask=src_key_padding_mask.bool()) #size is batch_size, max_len, d_model 
+        if self.causal_pool1:
+            cumulative_sum = torch.cumsum(out, dim=1)  # Shape: (batch_size, max_len, d_model)
+            timestep_indices = torch.arange(1, out.size(1) + 1).view(1,-1, 1).to(self.device)
+            out = cumulative_sum / timestep_indices  # Divide cumulative sums by timestep indices, size is still same as before
+        
+        ##similar to the capacity encoder transformer, from the section where numSetsPerAgent is None, but if causal_pool is True then we do causal pooling 
+        embed=self.secondEncoder(src=out,mask=src_mask,src_key_padding_mask=src_key_padding_mask.bool())
 
+        if self.causal_pool2:
+            cumulative_sum = torch.cumsum(embed, dim=1)  # Shape: (batch_size, max_len, d_model)
+            timestep_indices = torch.arange(1, embed.size(1) + 1).view(1,-1, 1).to(self.device)
+            embed = cumulative_sum / timestep_indices  # Divide cumulative sums by timestep indices
+        outputEmbed=self.out_linear(embed) #size is batch_size, max_len, embedDim
+        return outputEmbed   
 
 
 class CapacityEncoderV2(torch.nn.Module):
@@ -414,7 +453,7 @@ class CapacityEncoderV2(torch.nn.Module):
             for seqLen in self.seqLenList: 
                 contrastiveLoss_k = self.simclr_loss(data,numSetsPerAgent=self.cfg['numSetsPerAgent'],seqLen=seqLen)
                 contrastiveLoss=contrastiveLoss+contrastiveLoss_k
-            loss=self.cfg['contWeight']*contrastiveLoss
+            loss=contrastiveLoss
             loss.backward()
             self.optimizer.step()
             avgLossCon += contrastiveLoss.item()
@@ -430,10 +469,7 @@ class CapacityEncoderV2(torch.nn.Module):
         
         testDataset=testDataset[torch.randperm(testDataset.size()[0])]
         #with torch.no_grad():
-        if self.cfg['evalOn2Sets']:
-            numSetsPerAgent=2
-        else:
-            numSetsPerAgent=self.cfg['numSetsPerAgent']
+        numSetsPerAgent=self.cfg['numSetsPerAgent']
         contrastiveLoss=0.0
         for seqLen in self.seqLenList:
             contrastiveLoss_k = self.simclr_loss(testDataset,numSetsPerAgent=numSetsPerAgent,seqLen=seqLen) #we feed in full test dataset but still divying it into sets and computing contrastive loss

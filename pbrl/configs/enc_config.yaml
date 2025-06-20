@@ -1,28 +1,23 @@
 NoNegative: False
 action_dim: None #replace
-actionWeight: 0
 batch_size: 256
-contWeight: 1
 cosine_lr: True
-decoderlr: 0.001
 device: cuda
 early_stop: False
 embedDim: 16
 epochs: 4000 #replace
-evalOn2Sets: True
-exp_name: None
-filepath: None
-group: None
-job_type: None
+exp_name: None #replace
+filepath: None #replace
+group: None #replace
+job_type: None #replace
 lr: .00001
 numSetsPerAgent: 2
 obs_dim: None #replace
 obsOnly: False
-seed: None
+seed: None #replace
 stepMax: None #replace
 task_name: None #replace
 temp: 0.1
-trainUniqueTrajs: True
 transformerCfg:
       avgPool: True
       batch_first: True

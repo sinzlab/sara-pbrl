@@ -9,7 +9,6 @@ import torch
 from pathlib import Path
 import gym
 import sys
-sys.path.append(os.path.join(os.path.expanduser('~'),'rltransfer/PreferenceTransformer'))
 import wrappers
 import collections
 import collections.abc
@@ -52,51 +51,6 @@ def remove_05_pref_dataset(data_dict,labelKey):
     return filtered_dict
 
 
-def update_pref_datasets(data_folder,labelKey):
-
-
-    # Iterate over all subdirectories
-    for folder in os.listdir(data_folder):
-        folder_path = os.path.join(data_folder, folder)
-
-        # Check if the folder name contains "False" and is indeed a directory
-        if "False" in folder and os.path.isdir(folder_path):
-            print(folder)
-            # Define file paths
-            files_to_process = [
-                os.path.join(folder_path, "pref_eval_dataset_False.pkl"),
-                os.path.join(folder_path, "preference_dataset.pkl")
-            ]
-
-            for file_path in files_to_process:
-                print(file_path)
-                if os.path.exists(file_path):
-                    # Load the pickle file
-                    with open(file_path, "rb") as f:
-                        data_dict = pickle.load(f)
-
-                    # Get the indices where labels are [.5, .5]
-                    labels = np.array(data_dict[labelKey])
-                    mask = ~(np.all(labels == [0.5, 0.5], axis=1))
-                    if sum(mask)!=len(labels): #if the number of True (ie no 05 rows) is equal to the number of labels, we don't need to filter anything
-                        # Save a backup of the original file
-                        old_file_path = file_path.replace(".pkl", "_OLD.pkl")
-                        with open(old_file_path, "wb") as f:
-                            pickle.dump(data_dict, f)
-
-
-                        print(mask.shape)
-                        filtered_dict={}
-                        for key, value in data_dict.items():
-                            if key in ['start_indices', 'start_indices_2']:
-                                continue
-                            filtered_dict[key] = value[mask]
-
-                        # Save the updated dict back to the original file
-                        with open(file_path, "wb") as f:
-                            pickle.dump(filtered_dict, f)
-
-                        print(f"Processed {file_path}, removed {len(labels) - sum(mask)} rows. Original saved as {old_file_path}.")
 
 
 def get_args():
@@ -114,10 +68,10 @@ def get_args():
     parser.add_argument("--num_query", type=int, default=500)
     parser.add_argument("--query_len", type=int, default=100)
     parser.add_argument("--train_split_size", type=float, default=0.8)
-    parser.add_argument("--save_dir", type=str, default='/mnt/vast-react/projects/rl_pref_constraint/PbRL')
+    parser.add_argument("--save_dir", type=str, default='PbRL_results')
     parser.add_argument("--data_seed", type=int, default=3407)
     parser.add_argument("--max_ep_len", type=int, default=1000)
-    parser.add_argument("--data_dir", type=str, default=os.path.join(os.path.expanduser('~'),'rltransfer/PreferenceTransformer/human_label')) 
+    parser.add_argument("--data_dir", type=str, default=os.path.join('PreferenceTransformer/human_label')) 
   
 
     return parser.parse_args()
