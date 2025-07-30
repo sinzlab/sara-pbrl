@@ -48,9 +48,9 @@ def get_run_max_epochs(project,group):
         default=None
     )
     if max_epoch_run:
-        return max_epoch_run
+        return max_epoch_run, max_epoch_run.summary.get("epoch", 0)
     else:
-        raise ValueError("No finished runs for {} and {}".format(project,group))
+        return None
 
 
 def has_completed_run_with_config(project: str, group: str, target_config: dict) -> bool:
@@ -95,11 +95,12 @@ def get_args():
     parser.add_argument("--fraction", type=float, default=1.0)
     parser.add_argument("--use05", type=lambda x: x.lower() == "true", default=None)
     parser.add_argument("--mistake_rate", type=float, default=0.0) 
-    parser.add_argument("--run_type", type=str, default=None) #run_IQL_SARA, run_IQL_PrefTrans, run_IQL_PrefTransADT
+    parser.add_argument("--run_type", type=str, default=None) #run_IQL_SARA, run_IQL_PrefTrans, run_IQL_PrefTransADT, run_DPPO
     parser.add_argument("--script_label", type=lambda x: x.lower() == "true", default=False) #to use reward models run using the script labels
     
     
-    parser.add_argument("--enc_epochs", type=int, default=4000) 
+    parser.add_argument("--enc_epochs", type=int, default=None) 
+    parser.add_argument("--enc_lr", type=float, default=None, help="Learning rate for capacity encoder. If not specified, uses the default from config file.")
     parser.add_argument("--windowRewards",type=lambda x: int(x) if x.lower() != "none" else None, default=None)
     parser.add_argument("--src_mask_decoder", type=lambda x: x.lower() == "true", default=False)
     parser.add_argument("--use_vary_seqLens", type=lambda x: x.lower() == "true", default=True)
@@ -108,12 +109,16 @@ def get_args():
     parser.add_argument("--enc_configpath", type=str, default=None) #Not mandatory to specify but rather only specify this if running IQL with a preferred capacity encoder congif. This will run over seeds (or seed if args.seed specified) 
     parser.add_argument("--jobInfo", type=str, default='')
 
+    parser.add_argument("--pt_epochs", type=int, default=10000) 
+
 
     parser.add_argument("--mod_hopper", type=lambda x: x.lower() == "true", default=None) #if doing the hopper task and use this flag, then use hopper dataset that was transformed to the walker dim
     
         
     #defaults for all runs
-    parser.add_argument("--save_dir", type=str, default='PbRL_results')
+    parser.add_argument("--save_dir", type=str, default='/mnt/vast-react/projects/rl_pref_constraint/PbRL')
+    parser.add_argument("--alpha", type=float, default=1.0, help="Weight for preferred similarity")
+    parser.add_argument("--beta", type=float, default=0.0, help="Weight for unpreferred similarity")
 
     return parser.parse_args()
 
@@ -180,13 +185,26 @@ def run_pipeline(args):
 
     max_ep_len=get_env_max_len(args.task)
     if args.run_type=='run_IQL_SARA':
+        # Set default enc_epochs based on task if not provided
+        if args.enc_epochs is None:
+            if args.task == 'hopper-medium-expert-v2':
+                args.enc_epochs = 2000
+            elif args.task == 'walker2d-medium-replay-v2' or args.task == 'halfcheetah-medium-replay-v2':
+                args.enc_epochs = 20000
+            else:
+                args.enc_epochs = 4000
+        
         data_dir=os.path.join(args.save_dir,taskForData,'Data',dataset_name) #if mod_hopper set to true, then taskForData is the hopper dataset (modified) while the IQL task is the walker
         with open(os.path.join(data_dir,'train_set.pkl'), 'rb') as f:
             train_set = pickle.load(f) 
         with open(os.path.join(data_dir,'test_set.pkl'), 'rb') as f:
             test_set = pickle.load(f) 
-                
-        with open(os.path.join(args.enc_configpath,'enc_config.yaml'), 'rb') as f:
+
+        if 'yaml' not in args.enc_configpath:
+            configPath=os.path.join(args.enc_configpath,'enc_config.yaml')
+        else:
+            configPath=args.enc_configpath   
+        with open(configPath, 'rb') as f:
             base_config=yaml.safe_load(f)
         job_type='{}'.format(args.jobInfo)
         for seed in seed_list:
@@ -197,10 +215,15 @@ def run_pipeline(args):
             new_config = copy.deepcopy(base_config)
             new_config['task_name']=args.task
             obs_dim, action_dim=get_task_dims(args.task,dataset_name,args.save_dir)
+            print('obsdim {} action dim {}'.format(obs_dim,action_dim))
             new_config['action_dim']=action_dim
             new_config['obs_dim']=obs_dim
             new_config['epochs']=args.enc_epochs
             new_config['stepMax']=max_ep_len
+
+            # Override learning rate if specified
+            if args.enc_lr is not None:
+                new_config['lr'] = args.enc_lr
 
             new_config['filepath']=fp
             new_config['exp_name']=exp_name
@@ -232,7 +255,7 @@ def run_pipeline(args):
 
             #Run IQL 
             script_path = os.path.join("OfflineRL-Kit/run_example/run_iql_infrewards.py")
-            iqlCommand=["python", script_path, "--task", args.task, '--seed', str(seed), '--simWRestrictedWeight', str(1.0), '--simWUnrestrictedWeight', str(0.0) ,'--causal_pool1', 'False', '--causal_pool2', str(args.causal_pool), '--reward_model', 'SimilarityRewards', "--capacityEncoderFilepath", fp, '--dataset_name',dataset_name, '--job_type', job_type, '--windowRewards', str(args.windowRewards), '--src_mask_decoder', str(args.src_mask_decoder),'--use_vary_seqLens', str(args.use_vary_seqLens)]
+            iqlCommand=["python", script_path, "--task", args.task, '--seed', str(seed), '--simWRestrictedWeight', str(args.alpha), '--simWUnrestrictedWeight', str(args.beta) ,'--causal_pool1', 'False', '--causal_pool2', str(args.causal_pool), '--reward_model', 'SimilarityRewards', "--capacityEncoderFilepath", fp, '--dataset_name',dataset_name, '--job_type', job_type, '--windowRewards', str(args.windowRewards), '--src_mask_decoder', str(args.src_mask_decoder),'--use_vary_seqLens', str(args.use_vary_seqLens)]
             iqlCommand.append('--max_ep_len')
             iqlCommand.append(str(max_ep_len))
             if 'kitchen' in args.task or 'pen' in args.task:
@@ -247,9 +270,11 @@ def run_pipeline(args):
         if 'ADT' not in args.run_type:
             PTproject="PreferenceTransformer_{}".format(taskForData)
             jobInfoPT=args.jobInfo
+            model_type="PrefTransformer"
         else:
-            PTproject="PrefTransformerADT_{}".format(taskForData)
+            PTproject="PrefTransformerADTHighG_{}".format(taskForData)
             jobInfoPT='ADT_'+args.jobInfo
+            model_type="PrefTransformerADT"
         if args.script_label:
             PTproject += '_{}'.format('scriptLabel')
         if args.mistake_rate>0.0:
@@ -257,8 +282,55 @@ def run_pipeline(args):
 
         for seed in seed_list:
             prefTransGroup='{}_seed{}_FakeEval'.format(dataset_name,seed)
-            best_run=get_run_max_epochs(PTproject,prefTransGroup)
-            prefTransFilepath=get_root_value_PT(best_run,PTproject)
+            result = None#get_run_max_epochs(PTproject,prefTransGroup)
+            runPTPretrain=False
+            if result is None:
+                runPTPretrain=True
+            else:
+                best_run, epoch_count = result
+                if epoch_count<args.pt_epochs-1:
+                    runPTPretrain=True
+            if runPTPretrain:
+                # First step: Train the preference transformer
+                ptCommand = ["python", "-m", "JaxPref.new_preference_reward_main", 
+                            "--env", taskForData, 
+                            "--transformer.embd_dim", "256", 
+                            "--transformer.n_layer", "1", 
+                            "--transformer.n_head", "4", 
+                            "--logging.output_dir", args.save_dir, 
+                            "--batch_size", "256", 
+                            "--skip_flag", "0", 
+                            "--n_epochs", str(args.pt_epochs), 
+                            "--seed", str(seed), 
+                            "--fraction", str(args.fraction),  
+                            "--mistake_rate", str(args.mistake_rate), 
+                            "--model_type", model_type]
+                if args.use05:
+                    ptCommand.append("--use05")
+                    ptCommand.append(str(args.use05))
+                if not args.script_label:
+                    ptCommand.append("--use_human_label")
+                    ptCommand.append(str(not args.script_label))
+
+                # Change to PreferenceTransformer directory and run the command
+                original_cwd = os.getcwd()
+                os.chdir("PreferenceTransformer")
+                try:
+                    PTResult = subprocess.run(ptCommand, check=True)
+                    print("Preference Transformer training completed successfully")
+                    print(PTResult.stdout)
+                finally:
+                    os.chdir(original_cwd)
+            
+            # Second step: Run IQL with the trained preference transformer
+            result = get_run_max_epochs(PTproject,prefTransGroup)
+            if result is None:
+                raise ValueError(f"No finished runs found for project {PTproject} and group {prefTransGroup}")
+            else:
+                best_run, epoch_count = result
+                if epoch_count<args.pt_epochs-1: 
+                    raise ValueError(f"No finished runs found for project {PTproject} and group {prefTransGroup} with {args.pt_epochs-1} epochs")
+            prefTransFilepath=get_root_value_PT(best_run.id,PTproject)
             script_path = os.path.expandvars("OfflineRL-Kit/run_example/run_iql_infrewards.py")
             iqlCommand=["python", script_path, "--task", args.task, '--seed', str(seed), '--reward_model', 'PreferenceTransformer', "--PrefTrans_ckpt_dir", prefTransFilepath, '--dataset_name', dataset_name, '--job_type', jobInfoPT]
             iqlCommand.append('--max_ep_len')
@@ -272,11 +344,46 @@ def run_pipeline(args):
             IQlResult = subprocess.run(iqlCommand, check=True)
             print(IQlResult.stdout)
 
+    if args.run_type == 'run_DPPO':
+        for seed in seed_list:
+            # First step: Train the preference transformer with DPPO model type
+            dpCommand = ["python", "-m", "JaxPref.new_preference_reward_main", 
+                        "--env", taskForData, 
+                        "--seed", str(seed), 
+                        "--fraction", str(args.fraction),  
+                        "--mistake_rate", str(args.mistake_rate), 
+                        "--model_type", "PrefTransformerDPPO"]
+            if args.use05:
+                dpCommand.append("--use05")
+                dpCommand.append("True")
+            if not args.script_label:
+                dpCommand.append("--use_human_label")
+                dpCommand.append("True")
 
-    
-                
-
-    
+            # Change to DPPO directory and run the command
+            original_cwd = os.getcwd()
+            os.chdir("DPPO")
+            try:
+                PredResult = subprocess.run(dpCommand, check=True)
+                print("DPPO Preference Predictor training completed successfully")
+                print(PredResult.stdout)
+            finally:
+                os.chdir(original_cwd)
+            
+            # Second step: Run DPPO training
+            dppoCommand = ["python", "DPPO/train.py", 
+                          "--env_name", args.task, 
+                          "--seed", str(seed), 
+                          "--dataset_name", dataset_name]
+            
+            # Add lambda parameter for kitchen and pen tasks
+            # Default value of .5 is used for D4RL locomotion tasks
+            if 'kitchen' in args.task or 'pen' in args.task:
+                dppoCommand.append('--lambd')
+                dppoCommand.append('.1')
+            
+            DPPOResult = subprocess.run(dppoCommand, check=True)
+            print(DPPOResult.stdout)
 
 
 if __name__ == "__main__":

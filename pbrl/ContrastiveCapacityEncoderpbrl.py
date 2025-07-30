@@ -301,6 +301,7 @@ class CapacityEncoderV2(torch.nn.Module):
             if 'mistake' in cfg['group']:
                 projectName += '_error'
             self.logger=wandb.init(project="CapacityEncoder_{}".format(projectName),group=self.cfg['group'], name=cfg['exp_name'], config=self.cfg, job_type=cfg['job_type'],dir=wandbDir) 
+        print("LR {}".format(cfg['lr']))
         self.optimizer = torch.optim.Adam(self.capacity_encoder.parameters(), lr=cfg['lr'])
         if self.cfg['cosine_lr']:
             #self.scheduler=torch.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=cfg['lr'],steps_per_epoch=len(self.trainDataloader),epochs=cfg['epochs'],anneal_strategy = 'cos')
@@ -308,7 +309,17 @@ class CapacityEncoderV2(torch.nn.Module):
                                         last_epoch=-1, verbose='deprecated')
 
         self.seqLenList=cfg['seqLenList']
-      
+        if isinstance(self.cfg['numSetsPerAgent'], str) and self.cfg['numSetsPerAgent'].lower() == "none":
+            self.cfg['numSetsPerAgent'] = None
+        
+        if self.cfg['numSetsPerAgent'] is not None: #needed for evaluation. But defined here as as class attribute so that when we infer rewards for offline RL training, we are consistent with how it is computed (one set for all trajectories vs one latent per trajectories)
+            self.numEvalSetsPerAgent=1
+        else:
+            self.numEvalSetsPerAgent=None
+
+        #compatibility with old configs
+        if 'random_seqLen_start' not in self.cfg:
+            self.cfg['random_seqLen_start']=False
     
     def forward(self,batch, setSize, numSetsPerAgent, eval=False, seqLen=None):
         '''batch is the batch for one agent and includes the mask (but not agent id): size is batch_size, numTimesteps, inputDim (if obs only, then obsDim, otherwise obsDim+acitonDim) + 1 (mask)
@@ -318,8 +329,8 @@ class CapacityEncoderV2(torch.nn.Module):
          
         The output is then number of sets in batch by embedDim 
         '''
-        if self.cfg['numSetsPerAgent']<2 and not eval:
-            raise ValueError("numSetsPerAgent should be at least 2 unless doing eval")
+        # if self.cfg['numSetsPerAgent']<2 and not eval:
+        #     raise ValueError("numSetsPerAgent should be at least 2 unless doing eval")
         assert batch.shape[2] == (self.inputDim+1),(batch.shape, (self.inputDim+1))
 
         ##########Sample subsequence##################
@@ -386,7 +397,8 @@ class CapacityEncoderV2(torch.nn.Module):
             dataAgent=dataAgent[:,:,:-1].clone().detach() #excludes agentID but still includes the mask info
             latents=self.forward(dataAgent, setSize=setSize, numSetsPerAgent=numSetsPerAgent, seqLen=seqLen) # numSetsAgent by embedDim
             numSetsByAgent.append(latents.shape[0]) #the number of latents we end up with is simply given by the number of trajectories for this agent in this batch. Otherwise it is numSetsPerAgent
-            all_latents[agIdx,:latents.shape[0],:]=latents 
+            all_latents[agIdx,:latents.shape[0],:]=latents
+             
 
         
         cos=torch.nn.CosineSimilarity(dim=1)
@@ -435,7 +447,7 @@ class CapacityEncoderV2(torch.nn.Module):
 
                     s = torch.split(simCrossAgent, numSetsOther)
                     denomSimSum = torch.stack(s).sum(dim=1) #this is dimension of number of sets  by agent i. This gives the denominator terms for similarities between this agent and other agent on all the sets
-                    numRepeats=(numSetsPerAgent-1) #repeat for the number of times we have positive samples for agent_i and set_m 
+                    numRepeats=(numSetsByAgent[i]-1) #repeat for the number of times we have positive samples for agent_i and set_m 
                     denomSimSum=denomSimSum.repeat_interleave(numRepeats)
                     r=simSameAgent/(simSameAgent+denomSimSum)
                     contrastiveLoss=contrastiveLoss-torch.mean(torch.log(r))
@@ -480,7 +492,7 @@ class CapacityEncoderV2(torch.nn.Module):
         return contrastiveLoss.item()
     
     def fit(self):
-        
+
         self.capacity_encoder.train()
         bestLoss=1000.0
        
@@ -550,19 +562,33 @@ class CapacityEncoderV2(torch.nn.Module):
 
     
     def getEvalLatents(self,i,dataloader,seqLen=None):
+
         dataset=dataloader.dataset
         allIndsAgenti=(dataset[:,0,-1]==i).nonzero().flatten()
         uniqueTrajs_i=torch.unique(dataset[allIndsAgenti],dim=0)
-        latenti=self.forward(uniqueTrajs_i[:,:,:-1],setSize=uniqueTrajs_i[:,:,:-1].shape[0],numSetsPerAgent=1, eval=True, seqLen=seqLen) #passing in the whole set to get one latent for the agent
+        if self.numEvalSetsPerAgent is not None:
+            setSize=uniqueTrajs_i[:,:,:-1].shape[0]
+        else:
+            setSize=None
+        #if numSetsPerAgent is 1, passing in the whole set to get one latent for the agent. Otherwise just getting the eval latents for the agent (returns one latent per trajectory)
+        latenti=self.forward(uniqueTrajs_i[:,:,:-1],setSize=setSize,numSetsPerAgent=self.numEvalSetsPerAgent, eval=True, seqLen=seqLen) 
         return latenti
 
     def get_full_setCrossSim(self,dataloader,seqLen=None):
         self.capacity_encoder.eval()
-
-        latenti=self.getEvalLatents(0,dataloader,seqLen=seqLen)
+        latenti=self.getEvalLatents(0,dataloader,seqLen=seqLen) #if numEvalSetsPerAgent=1, this produces one latent for all trajectories. Otherwise, it produces a latent for each trajectory
         latentj=self.getEvalLatents(1,dataloader,seqLen=seqLen)
         cos=torch.nn.CosineSimilarity(dim=1)
-        return cos(latenti,latentj).item()
+        if self.numEvalSetsPerAgent==1:
+            sim=cos(latenti,latentj).item()
+        else:
+            indListi=torch.tensor(range(latenti.shape[0]))
+            indListj=torch.tensor(range(latentj.shape[0]))
+            comboIndsCross=torch.cartesian_prod(indListi, indListj)
+            repeated_i=latenti[comboIndsCross[:,0],:] #these are latents indexed as 000111222 up to the number of latents for agent_i -1 
+            repeated_j=latentj[comboIndsCross[:,1],:] #these are latents indexed as 0123401234 up to the number of latents for agent_j -1
+            sim=torch.mean(cos(repeated_i,repeated_j)).item()
+        return sim
 
 
 
