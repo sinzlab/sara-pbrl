@@ -211,6 +211,7 @@ def main():
     parser.add_argument('--model', required=True, choices=['PT', 'PT+ADT', 'SARA'], help='Model type')
     parser.add_argument('--job_type', required=True, help='Job type for the specified model')
     parser.add_argument('--gt_job_type', default='NewNorm', help='Job type for ground truth (default: NewNorm)')  # Added for ground truth
+    parser.add_argument('--mistake_rate', type=float, default=0.0, help='Mistake rate for error experiments (default: 0.0)')
     
     args = parser.parse_args()
     
@@ -222,11 +223,24 @@ def main():
     else:
         raise ValueError(f"Unknown model type: {args.model}")
     
+    # Handle mistake rate modifications
+    dataset_name = args.dataset_name
+    project_name = args.project
+    project_name_gt = args.project  # Ground truth uses original project name
+    
+    if args.mistake_rate > 0.0:
+        dataset_name += '_mistake{}'.format(int(args.mistake_rate*100))
+        project_name += '_error'  # Only for model data, not ground truth
+    
     # Construct group names
-    model_group = f"{args.dataset_name}_{model_name}"
+    model_group = f"{dataset_name}_{model_name}"
     gt_group = "GroundTruth"  # Ground truth group name
     
     print(f"Processing: Project={args.project}, Dataset={args.dataset_name}, Model={args.model}, Seed={args.seed}")
+    print(f"Mistake rate: {args.mistake_rate}")
+    print(f"Modified dataset name: {dataset_name}")
+    print(f"Model project: {project_name}")
+    print(f"GT project: {project_name_gt}")
     print(f"Model group: {model_group}")
     print(f"Ground truth group: {gt_group}")
     
@@ -237,7 +251,7 @@ def main():
         if args.gt_job_type=="None":
             args.gt_job_type=None
         gt_job_folder = "null" if args.gt_job_type is None else args.gt_job_type
-        gt_save_path = os.path.join(base_save_path, args.project, args.dataset_name, "GroundTruth", gt_job_folder)
+        gt_save_path = os.path.join(base_save_path, project_name_gt, args.dataset_name, "GroundTruth", gt_job_folder)
         os.makedirs(gt_save_path, exist_ok=True)  # Create directory structure if it doesn't exist
         
         # Check if ground truth data already exists, if so load it
@@ -250,16 +264,16 @@ def main():
                 gt_data = pickle.load(f)
         else:
             print("Ground truth data not found, creating new...")
-            gt_data = get_groundtruth_data(args.project, gt_group, args.gt_job_type, args.seed)
+            gt_data = get_groundtruth_data(project_name_gt, gt_group, args.gt_job_type, args.seed)
         
         # Get model data based on model type
         print(f"Loading {args.model} model data...")
         if args.job_type=="None":
             args.job_type=None
         if args.model in ['PT', 'PT+ADT']:
-            model_data = get_PT_data(args.project, model_group, args.job_type, args.seed)
+            model_data = get_PT_data(project_name, model_group, args.job_type, args.seed)
         elif args.model == 'SARA':
-            model_data = get_sim_dataset(args.project, model_group, args.job_type, args.seed)
+            model_data = get_sim_dataset(project_name, model_group, args.job_type, args.seed)
         
         # Compute correlations and outliers
         print("Computing correlations and outliers...")
@@ -288,7 +302,7 @@ def main():
         # Save model dataset
         # Handle None job_type for directory structure
         job_folder = "null" if args.job_type is None else args.job_type
-        model_save_path = os.path.join(base_save_path, args.project, args.dataset_name, model_group, job_folder)
+        model_save_path = os.path.join(base_save_path, project_name, dataset_name, model_group, job_folder)
         os.makedirs(model_save_path, exist_ok=True)  # Create directory structure if it doesn't exist
         model_filename = f"{args.model.lower()}_seed{args.seed}.pkl"
         save_dataset(model_data, model_save_path, model_filename)

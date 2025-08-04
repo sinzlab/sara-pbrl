@@ -9,7 +9,7 @@ import torch
 from pathlib import Path
 import gym
 import sys
-import wrappers
+#import wrappers
 import collections
 import collections.abc
 
@@ -68,10 +68,10 @@ def get_args():
     parser.add_argument("--num_query", type=int, default=500)
     parser.add_argument("--query_len", type=int, default=100)
     parser.add_argument("--train_split_size", type=float, default=0.8)
-    parser.add_argument("--save_dir", type=str, default='PbRL_results')
+    parser.add_argument("--save_dir", type=str, default='/mnt/vast-react/projects/rl_pref_constraint/PbRL')
     parser.add_argument("--data_seed", type=int, default=3407)
     parser.add_argument("--max_ep_len", type=int, default=1000)
-    parser.add_argument("--data_dir", type=str, default=os.path.join('PreferenceTransformer/human_label')) 
+    parser.add_argument("--data_dir", type=str, default=os.path.join('/mnt/vast-react/projects/rl_pref_constraint/SARA_PbRL/PreferenceTransformer/human_label')) 
   
 
     return parser.parse_args()

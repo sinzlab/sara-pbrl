@@ -174,6 +174,8 @@ def make_offline_dataset(cfg):
             allAgentLatents['seqLen{}'.format(seqLen)]={}
             for i in range(len(capacityEncoder.agent_list)):
                 latentsFullAgent=capacityEncoder.getEvalLatents(i,trainDataloader,seqLen=seqLen).clone().detach()
+                if len(latentsFullAgent.shape)==2 and latentsFullAgent.shape[0]>1: #when we did not train on sets, then the getEvalLatents will also produce one latent per trajectory. Thus we must take the mean to get one eval latent. If we did train on sets, then the encoder will produce one latent for all trajectories (produced with self attention between trajs)
+                    latentsFullAgent=torch.mean(latentsFullAgent, dim=0)
                 if i==0:
                     agent='unpreferred'
                 if i==1:
@@ -182,6 +184,8 @@ def make_offline_dataset(cfg):
     else:
         for i in range(len(capacityEncoder.agent_list)):
             latents=capacityEncoder.getEvalLatents(i,trainDataloader).clone().detach()
+            if len(latents.shape)==2 and latents.shape[0]>1: #when we did not train on sets, then the getEvalLatents will also produce one latent per trajectory. Thus we must take the mean to get one eval latent. If we did train on sets, then the encoder will produce one latent for all trajectories (produced with self attention between trajs)
+                latents=torch.mean(latents, dim=0)
             if i==0:
                 agent='unpreferred'
             if i==1:

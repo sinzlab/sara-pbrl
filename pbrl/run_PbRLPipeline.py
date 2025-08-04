@@ -282,7 +282,7 @@ def run_pipeline(args):
 
         for seed in seed_list:
             prefTransGroup='{}_seed{}_FakeEval'.format(dataset_name,seed)
-            result = None#get_run_max_epochs(PTproject,prefTransGroup)
+            result = get_run_max_epochs(PTproject,prefTransGroup)
             runPTPretrain=False
             if result is None:
                 runPTPretrain=True

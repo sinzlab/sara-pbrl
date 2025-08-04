@@ -17,7 +17,7 @@ import json
 from datetime import datetime
 
 
-def run_single_seed(project, dataset_name, model, job_type, gt_job_type, seed):
+def run_single_seed(project, dataset_name, model, job_type, gt_job_type, seed, mistake_rate):
     """Run compute_correlations_save_datasets.py for a single seed and capture output."""
     
     cmd = [
@@ -27,7 +27,8 @@ def run_single_seed(project, dataset_name, model, job_type, gt_job_type, seed):
         '--model', model,
         '--job_type', job_type,
         '--gt_job_type', gt_job_type,
-        '--seed', str(seed)
+        '--seed', str(seed),
+        '--mistake_rate', str(mistake_rate)
     ]
     
     print(f"Running seed {seed}...")
@@ -186,6 +187,7 @@ def main():
     parser.add_argument('--model', required=True, choices=['PT', 'PT+ADT', 'SARA'], help='Model type')
     parser.add_argument('--job_type', required=True, help='Job type for the specified model')
     parser.add_argument('--gt_job_type', default='NewNorm', help='Job type for ground truth (default: NewNorm)')
+    parser.add_argument('--mistake_rate', type=float, default=0.0, help='Mistake rate for error experiments (default: 0.0)')
     
     args = parser.parse_args()
     
@@ -198,13 +200,14 @@ def main():
     print(f"Model: {args.model}")
     print(f"Job Type: {args.job_type}")
     print(f"GT Job Type: {args.gt_job_type}")
+    print(f"Mistake Rate: {args.mistake_rate}")
     print()
     
     # Run for each seed
     results = []
     for seed in seeds:
         result = run_single_seed(args.project, args.dataset_name, args.model, 
-                                args.job_type, args.gt_job_type, seed)
+                                args.job_type, args.gt_job_type, seed, args.mistake_rate)
         results.append(result)
     
     # Determine model save path (same logic as in compute_correlations_save_datasets.py)
@@ -213,7 +216,15 @@ def main():
     elif args.model == 'SARA':
         model_name = 'SimilarityRewards'
     
-    model_group = f"{args.dataset_name}_{model_name}"
+    # Handle mistake rate modifications (same as in compute_correlations_save_datasets.py)
+    dataset_name = args.dataset_name
+    project_name = args.project
+    
+    if args.mistake_rate > 0.0:
+        dataset_name += '_mistake{}'.format(int(args.mistake_rate*100))
+        project_name += '_error'  # Only for model data, not ground truth
+    
+    model_group = f"{dataset_name}_{model_name}"
     base_save_path = "relabeled_offlinedatasets"
     
     # Handle None job_type for directory structure
@@ -222,7 +233,7 @@ def main():
         job_type_processed = None
     job_folder = "null" if job_type_processed is None else job_type_processed
     
-    model_save_path = os.path.join(base_save_path, args.project, args.dataset_name, model_group, job_folder)
+    model_save_path = os.path.join(base_save_path, project_name, dataset_name, model_group, job_folder)
     
     # Generate and save summary
     generate_summary(results, model_save_path)
