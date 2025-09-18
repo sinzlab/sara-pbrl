@@ -76,8 +76,11 @@ def get_args():
     #added for Preference Transformer Rewards
     parser.add_argument("--PrefTrans_ckpt_dir", type=str, default=None) #the checkpoint of the trained reward model from PreferenceTransformer, down to level (but not including) the folder seed name. This will be added below to match the seed input
 
+    #added for Bradley-Terry Contrastive Rewards
+    parser.add_argument("--BradleyTerry_ckpt_dir", type=str, default=None) #the checkpoint of the trained Bradley-Terry reward model, down to level (but not including) the folder seed name. This will be added below to match the seed input
+
     #specify whether we use my similarity rewards model or Preference Transformer model 
-    parser.add_argument("--reward_model", type=str, default='SimilarityRewards') #either SimilarityRewards or PreferenceTransformer
+    parser.add_argument("--reward_model", type=str, default='SimilarityRewards') #either SimilarityRewards or PreferenceTransformer or BradleyTerryContrastive
 
     #specify save dir
     parser.add_argument("--save_dir", type=str, default='/mnt/vast-react/projects/rl_pref_constraint/PbRL')
@@ -86,41 +89,35 @@ def get_args():
 
     return parser.parse_args()
 
-def make_PT_dataset(env_name,seed,ckpt_dir,max_ep_len):
-    dataset=make_env_and_dataset(env_name=env_name, seed=seed, ckpt_dir=ckpt_dir,model_type='PrefTransformer')
-    #note that make_env_and_dataset both replaces the rewards with PT rewards from teh trained model and it inputs into the D4RLDataset class. In the init of the D4RL dataset class, a few preprocessing steps (done_floats and clip_to_eps) occur, which is the same as what we use when we make the offline dataset for our model
-    #this d4rl dataset now needs to be converted to the dict dataset and normalized in accordance to what we use for the offline rl toolkit
+def make_reward_model_dataset(env_name, seed, ckpt_dir, max_ep_len, model_type):
+    """
+    Create dataset with rewards from specified model type.
+    
+    Args:
+        env_name: Environment name
+        seed: Random seed
+        ckpt_dir: Checkpoint directory (None for GroundTruth)
+        max_ep_len: Maximum episode length
+        model_type: One of 'GroundTruth', 'PrefTransformer', 'BradleyTerryContrastive'
+    
+    Returns:
+        datasetOffline: Normalized offline dataset dictionary
+    """
+    dataset = make_env_and_dataset(env_name=env_name, seed=seed, ckpt_dir=ckpt_dir, model_type=model_type)
+    
+    # Convert to offline dataset format
+    datasetOffline = {}
+    datasetOffline['observations'] = dataset.observations
+    datasetOffline['actions'] = dataset.actions
+    datasetOffline['rewards'] = dataset.rewards
+    datasetOffline['masks'] = dataset.masks
+    datasetOffline['terminals'] = dataset.dones_float
+    datasetOffline['next_observations'] = dataset.next_observations
 
-    datasetOffline={}
-    datasetOffline['observations']=dataset.observations
-    datasetOffline['actions']=dataset.actions
-    datasetOffline['rewards']=dataset.rewards
-    datasetOffline['masks']=dataset.masks
-    datasetOffline['terminals']=dataset.dones_float
-    datasetOffline['next_observations']=dataset.next_observations
-
-    datasetOffline=normalize(datasetOffline, env_name, max_episode_steps=max_ep_len)
-    if 'antmaze' in env_name:
-        datasetOffline['rewards'] -= 1.0
-    if ('halfcheetah' in env_name or 'walker2d' in env_name or 'hopper' in env_name):
-        datasetOffline['rewards'] += 0.5
-
-    return datasetOffline
-
-def make_GT_dataset(env_name,seed,max_ep_len):
-    dataset=make_env_and_dataset(env_name=env_name, seed=seed, ckpt_dir=None,model_type="GroundTruth")
-    #same as above for PT dataset, except we pass in model_type GroundTruth, so it does not replace rewards with PT rewards but rather uses the original task rewards. Then normalization proceeds the same
-    #this d4rl dataset now needs to be converted to the dict dataset and normalized in accordance to what we use for the offline rl toolkit
-
-    datasetOffline={}
-    datasetOffline['observations']=dataset.observations
-    datasetOffline['actions']=dataset.actions
-    datasetOffline['rewards']=dataset.rewards
-    datasetOffline['masks']=dataset.masks
-    datasetOffline['terminals']=dataset.dones_float
-    datasetOffline['next_observations']=dataset.next_observations
-
-    datasetOffline=normalize(datasetOffline, env_name, max_episode_steps=max_ep_len)
+    # Apply normalization
+    datasetOffline = normalize(datasetOffline, env_name, max_episode_steps=max_ep_len)
+    
+    # Apply environment-specific reward adjustments
     if 'antmaze' in env_name:
         datasetOffline['rewards'] -= 1.0
     if ('halfcheetah' in env_name or 'walker2d' in env_name or 'hopper' in env_name):
@@ -131,13 +128,15 @@ def make_GT_dataset(env_name,seed,max_ep_len):
 
 def make_offlinedataset_fromargs(cfg,reward_model):
     if reward_model=="GroundTruth":
-        dataset=make_GT_dataset(env_name=cfg['task'],seed=cfg['seed'],max_ep_len=cfg['max_ep_len'])
+        dataset = make_reward_model_dataset(env_name=cfg['task'], seed=cfg['seed'], ckpt_dir=None, max_ep_len=cfg['max_ep_len'], model_type='GroundTruth')
     elif reward_model=='SimilarityRewards':
         dataset=make_offline_dataset(cfg)
     elif reward_model=='PreferenceTransformer':
-        dataset=make_PT_dataset(env_name=cfg['task'],seed=cfg['seed'],ckpt_dir=cfg['PrefTrans_ckpt_dir'],max_ep_len=cfg['max_ep_len'])
+        dataset = make_reward_model_dataset(env_name=cfg['task'], seed=cfg['seed'], ckpt_dir=cfg['PrefTrans_ckpt_dir'], max_ep_len=cfg['max_ep_len'], model_type='PrefTransformer')
+    elif reward_model=='BradleyTerryContrastive':
+        dataset = make_reward_model_dataset(env_name=cfg['task'], seed=cfg['seed'], ckpt_dir=cfg['BradleyTerry_ckpt_dir'], max_ep_len=cfg['max_ep_len'], model_type='BradleyTerryContrastive')
     else:
-        raise ValueError("Reward Model must be either SimilarityRewards or PreferenceTransformer")
+        raise ValueError("Reward Model must be either SimilarityRewards, PreferenceTransformer, or BradleyTerryContrastive")
 
     return dataset
 
@@ -195,6 +194,12 @@ def train(args=get_args()):
             cfg['PrefTrans_ckpt_dir']=args.PrefTrans_ckpt_dir
         else:
             raise ValueError("Seed value given and Preference Transformer filepath do not match")
+
+    if args.BradleyTerry_ckpt_dir is not None:
+        if 'seed{}'.format(args.seed) in args.BradleyTerry_ckpt_dir:
+            cfg['BradleyTerry_ckpt_dir']=args.BradleyTerry_ckpt_dir
+        else:
+            raise ValueError("Seed value given and Bradley-Terry filepath do not match")
 
     dataset=make_offlinedataset_fromargs(cfg,args.reward_model)
     

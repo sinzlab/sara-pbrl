@@ -53,6 +53,34 @@ def get_run_max_epochs(project,group):
         return None
 
 
+def get_finished_run_with_job_type(project, group, job_type):
+    """Get a finished run for the given project, group, and job_type"""
+    api = wandb.Api()
+    
+    filters = {
+        "group": {"$regex": group},
+        "state": "finished"
+    }
+    
+    if job_type is not None:
+        filters["jobType"] = job_type
+    
+    try:
+        runs = api.runs(f"rlunigoe/{project}", filters=filters)
+        finished_runs = list(runs)
+    except ValueError as e:
+        return None   # project does not exist
+        
+    
+    if len(finished_runs) > 0:
+        if len(finished_runs) > 1:
+            raise ValueError("More than 1 finished run for BradleyTerryContrastive")
+        else:
+            return finished_runs[0]
+    else:
+        return None
+
+
 def has_completed_run_with_config(project: str, group: str, target_config: dict) -> bool:
     """
     Check if a completed run in the given project and group exists with the specified config,
@@ -95,7 +123,7 @@ def get_args():
     parser.add_argument("--fraction", type=float, default=1.0)
     parser.add_argument("--use05", type=lambda x: x.lower() == "true", default=None)
     parser.add_argument("--mistake_rate", type=float, default=0.0) 
-    parser.add_argument("--run_type", type=str, default=None) #run_IQL_SARA, run_IQL_PrefTrans, run_IQL_PrefTransADT, run_DPPO
+    parser.add_argument("--run_type", type=str, default=None) #run_IQL_SARA, run_IQL_PrefTrans, run_IQL_PrefTransADT, run_IQL_BradleyTerryContrastive, run_DPPO
     parser.add_argument("--script_label", type=lambda x: x.lower() == "true", default=False) #to use reward models run using the script labels
     
     
@@ -333,6 +361,65 @@ def run_pipeline(args):
             prefTransFilepath=get_root_value_PT(best_run.id,PTproject)
             script_path = os.path.expandvars("OfflineRL-Kit/run_example/run_iql_infrewards.py")
             iqlCommand=["python", script_path, "--task", args.task, '--seed', str(seed), '--reward_model', 'PreferenceTransformer', "--PrefTrans_ckpt_dir", prefTransFilepath, '--dataset_name', dataset_name, '--job_type', jobInfoPT]
+            iqlCommand.append('--max_ep_len')
+            iqlCommand.append(str(max_ep_len))
+            if 'kitchen' in args.task or 'pen' in args.task:
+                iqlCommand.append('--dropout_rate')
+                iqlCommand.append('.1')
+                iqlCommand.append('--temperature')
+                iqlCommand.append('.5')
+            
+            IQlResult = subprocess.run(iqlCommand, check=True)
+            print(IQlResult.stdout)
+
+    if args.run_type == 'run_IQL_BradleyTerryContrastive':
+        BTproject = "BradleyTerryContrastive_{}".format(taskForData)
+        jobInfoBT = args.jobInfo
+        
+        if args.script_label:
+            BTproject += '_{}'.format('scriptLabel')
+        if args.mistake_rate > 0.0:
+            BTproject += '_error'
+
+        for seed in seed_list:
+            bradleyTerryGroup = '{}_seed{}_FakeEval'.format(dataset_name, seed)
+            finished_run = get_finished_run_with_job_type(BTproject, bradleyTerryGroup, jobInfoBT)
+            runBTPretrain = False
+            if finished_run is None:
+                runBTPretrain = True
+            
+            if runBTPretrain:
+                # First step: Train the Bradley-Terry reward model
+                btCommand = ["python", "-m", "pbrl.train_bradley_terry_from_latents",
+                            "--task_name", taskForData,
+                            "--dataset_name", dataset_name,
+                            "--seed", str(seed),
+                            "--job_type", jobInfoBT]
+                
+                # Change to the parent directory to run the command
+                original_cwd = os.getcwd()
+                try:
+                    BTResult = subprocess.run(btCommand, check=True)
+                    print("Bradley-Terry training completed successfully")
+                    print(BTResult.stdout)
+                finally:
+                    pass  # No directory change needed for this command
+            
+            # Second step: Run IQL with the trained Bradley-Terry model
+            finished_run = get_finished_run_with_job_type(BTproject, bradleyTerryGroup, jobInfoBT)
+            if finished_run is None:
+                raise ValueError(f"No finished runs found for project {BTproject} and group {bradleyTerryGroup}")
+            
+            # Get the Bradley-Terry checkpoint filepath from the run config
+            bradleyTerryFilepath = finished_run.config.get('ckpt_filepath')
+            if not bradleyTerryFilepath:
+                raise ValueError(f"No ckpt_filepath found in Bradley-Terry run config for run {finished_run.name}")
+            
+            script_path = os.path.expandvars("OfflineRL-Kit/run_example/run_iql_infrewards.py")
+            iqlCommand = ["python", script_path, "--task", args.task, '--seed', str(seed), 
+                         '--reward_model', 'BradleyTerryContrastive', 
+                         "--BradleyTerry_ckpt_dir", bradleyTerryFilepath, 
+                         '--dataset_name', dataset_name, '--job_type', jobInfoBT]
             iqlCommand.append('--max_ep_len')
             iqlCommand.append(str(max_ep_len))
             if 'kitchen' in args.task or 'pen' in args.task:
